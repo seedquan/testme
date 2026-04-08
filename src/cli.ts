@@ -7,6 +7,8 @@ import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
 import { VERSION } from "./version.js";
 import type { JsonReport } from "./output/terminal.js";
+import { compareReports } from "./diff/compare-reports.js";
+import chalk from "chalk";
 
 const execFile = promisify(execFileCb);
 
@@ -106,6 +108,78 @@ export function createCli(): Command {
         }
       }
       console.log();
+    });
+
+  // Diff subcommand
+  program
+    .command("diff <base-report> <head-report>")
+    .description("Compare two test reports to detect regressions")
+    .option("--json", "output diff as JSON", false)
+    .action((baseFile: string, headFile: string, opts: { json: boolean }) => {
+      const basePath = resolve(process.cwd(), baseFile);
+      const headPath = resolve(process.cwd(), headFile);
+
+      if (!existsSync(basePath)) {
+        console.error(`Base report not found: ${baseFile}`);
+        process.exit(2);
+      }
+      if (!existsSync(headPath)) {
+        console.error(`Head report not found: ${headFile}`);
+        process.exit(2);
+      }
+
+      let base: JsonReport, head: JsonReport;
+      try {
+        base = JSON.parse(readFileSync(basePath, "utf-8")) as JsonReport;
+        head = JSON.parse(readFileSync(headPath, "utf-8")) as JsonReport;
+      } catch {
+        console.error("Failed to parse report files. Are they valid JSON?");
+        process.exit(2);
+      }
+
+      const diff = compareReports(base, head);
+
+      if (opts.json) {
+        console.log(JSON.stringify(diff, null, 2));
+      } else {
+        console.log();
+        console.log(chalk.bold("  testme diff"));
+        console.log(chalk.dim(`  base: ${baseFile}`));
+        console.log(chalk.dim(`  head: ${headFile}`));
+        console.log();
+
+        if (diff.newFindings.length > 0) {
+          console.log(chalk.red.bold(`  + ${diff.newFindings.length} new finding(s) (regressions)`));
+          for (const f of diff.newFindings) {
+            console.log(chalk.red(`    + [${f.severity}] ${f.title}`));
+          }
+          console.log();
+        }
+
+        if (diff.resolvedFindings.length > 0) {
+          console.log(chalk.green.bold(`  - ${diff.resolvedFindings.length} resolved finding(s)`));
+          for (const f of diff.resolvedFindings) {
+            console.log(chalk.green(`    - [${f.severity}] ${f.title}`));
+          }
+          console.log();
+        }
+
+        if (diff.persistentFindings.length > 0) {
+          console.log(chalk.yellow(`  = ${diff.persistentFindings.length} persistent finding(s)`));
+          console.log();
+        }
+
+        if (diff.summary.regression) {
+          console.log(chalk.red.bold("  Result: REGRESSION — new issues found"));
+        } else if (diff.resolvedFindings.length > 0) {
+          console.log(chalk.green.bold("  Result: IMPROVED — issues resolved, no new regressions"));
+        } else {
+          console.log(chalk.dim("  Result: No change"));
+        }
+        console.log();
+      }
+
+      process.exit(diff.summary.regression ? 1 : 0);
     });
 
   // Main test command (default)

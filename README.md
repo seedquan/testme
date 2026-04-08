@@ -84,6 +84,14 @@ testme https://github.com/owner/repo --plan-only
 testme https://github.com/owner/repo --dry-run --json > results.json
 ```
 
+### Compare reports for regressions
+
+```bash
+testme diff .testme-reports/old-report.json .testme-reports/new-report.json
+```
+
+Shows new findings (regressions), resolved findings, and persistent findings. Exits with code `1` if regressions are detected — useful in CI to gate merges.
+
 ### View past reports
 
 ```bash
