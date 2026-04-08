@@ -15,6 +15,12 @@
   "engines": {
     "node": ">=18"
   },
+  "files": [
+    "dist",
+    "Dockerfile.testme",
+    "README.md",
+    "LICENSE"
+  ],
   "type": "module",
   "bin": {
     "testme": "dist/index.js"

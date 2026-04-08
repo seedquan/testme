@@ -106,14 +106,17 @@ export function createCli(): Command {
   return program;
 }
 
-function parseRepoUrl(url: string): { owner: string; repo: string } | null {
+export function parseRepoUrl(url: string): { owner: string; repo: string } | null {
+  // Strip query params and hash
+  const cleaned = url.split("?")[0].split("#")[0];
+
   // Handle https://github.com/owner/repo or github.com/owner/repo
-  const match = url.match(/(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+)\/?$/);
+  const match = cleaned.match(/(?:https?:\/\/)?github\.com\/([^/]+)\/([^/]+?)\/?$/);
   if (match) {
     return { owner: match[1], repo: match[2].replace(/\.git$/, "") };
   }
   // Handle owner/repo shorthand
-  const shortMatch = url.match(/^([^/]+)\/([^/]+)$/);
+  const shortMatch = cleaned.match(/^([^/]+)\/([^/]+)$/);
   if (shortMatch) {
     return { owner: shortMatch[1], repo: shortMatch[2] };
   }

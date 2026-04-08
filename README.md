@@ -56,6 +56,34 @@ testme https://github.com/owner/repo \
 | `--json` | `false` | Output results as JSON (for CI/scripting) |
 | `--plan-only` | `false` | Generate test plan and exit (no Docker needed) |
 
+## Commands
+
+### Test a product (default)
+
+```bash
+testme https://github.com/owner/repo
+```
+
+### Preview the test plan (no Docker needed)
+
+```bash
+testme https://github.com/owner/repo --plan-only
+```
+
+### JSON output for CI pipelines
+
+```bash
+testme https://github.com/owner/repo --dry-run --json > results.json
+```
+
+### Clean up stale Docker containers
+
+```bash
+testme cleanup
+```
+
+Removes any Docker containers left behind by crashed or interrupted runs.
+
 ## Config File
 
 Create a `.testmerc.json` in your project root to persist settings:
