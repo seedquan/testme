@@ -34,6 +34,9 @@ export async function createAndStartContainer(
   const { stdout } = await execFile("docker", args);
   const id = stdout.trim();
 
+  // Verify container is actually running
+  await waitForContainer(id);
+
   // Start Xvfb inside the container
   await execInContainer(id, [
     "bash",
@@ -41,7 +44,38 @@ export async function createAndStartContainer(
     "Xvfb :99 -screen 0 1280x720x24 &",
   ]);
 
+  // Verify Xvfb started
+  await execInContainer(id, [
+    "bash",
+    "-c",
+    "for i in 1 2 3 4 5; do [ -e /tmp/.X11-unix/X99 ] && exit 0; sleep 0.5; done; exit 1",
+  ]).catch(() => {
+    // Xvfb may work without the socket file on some systems; continue
+  });
+
   return { id };
+}
+
+async function waitForContainer(
+  containerId: string,
+  maxWaitMs = 10_000
+): Promise<void> {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    try {
+      const { stdout } = await execFile("docker", [
+        "inspect",
+        "-f",
+        "{{.State.Running}}",
+        containerId,
+      ]);
+      if (stdout.trim() === "true") return;
+    } catch {
+      // Container not ready yet
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  throw new Error(`Container ${containerId.slice(0, 12)} failed to start within ${maxWaitMs}ms`);
 }
 
 export async function execInContainer(

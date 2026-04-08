@@ -1,3 +1,6 @@
+import { readFileSync, existsSync } from "node:fs";
+import { join } from "node:path";
+
 export interface Config {
   owner: string;
   repo: string;
@@ -61,3 +64,31 @@ export const DEFAULTS = {
   model: "sonnet",
   dockerImage: "testme-sandbox:latest",
 } as const;
+
+export interface ConfigFile {
+  githubToken?: string;
+  dryRun?: boolean;
+  budget?: number;
+  timeout?: number;
+  model?: string;
+  verbose?: boolean;
+  skipWeb?: boolean;
+  labels?: string[];
+}
+
+export const CONFIG_FILENAMES = [".testmerc.json", ".testmerc", "testme.config.json"];
+
+export function loadConfigFile(cwd: string): ConfigFile {
+  for (const filename of CONFIG_FILENAMES) {
+    const filepath = join(cwd, filename);
+    if (existsSync(filepath)) {
+      try {
+        const raw = readFileSync(filepath, "utf-8");
+        return JSON.parse(raw) as ConfigFile;
+      } catch {
+        // Invalid JSON, skip
+      }
+    }
+  }
+  return {};
+}

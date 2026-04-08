@@ -17,6 +17,7 @@ import {
   printResults,
   createSpinner,
 } from "../output/terminal.js";
+import { withRetry } from "../utils/retry.js";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -79,14 +80,23 @@ export async function run(config: Config): Promise<void> {
     process.exit(1);
   }
 
-  // Step 3: Start Docker container
+  // Step 3: Start Docker container (with retry)
   const dockerSpinner = createSpinner("Starting Docker container...");
   let container;
   try {
-    container = await createAndStartContainer(config);
+    container = await withRetry(
+      () => createAndStartContainer(config),
+      {
+        maxAttempts: 3,
+        delayMs: 2000,
+        onRetry: (attempt) => {
+          dockerSpinner.text = `Starting Docker container (retry ${attempt}/2)...`;
+        },
+      }
+    );
     dockerSpinner.succeed("Docker container running");
   } catch (err) {
-    dockerSpinner.fail("Failed to start Docker container");
+    dockerSpinner.fail("Failed to start Docker container after 3 attempts");
     console.error(err);
     process.exit(1);
   }

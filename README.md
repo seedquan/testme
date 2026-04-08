@@ -54,6 +54,26 @@ testme https://github.com/owner/repo \
 | `--skip-web` | `false` | Skip web UI testing |
 | `--labels <labels>` | | Extra issue labels (comma-separated) |
 
+## Config File
+
+Create a `.testmerc.json` in your project root to persist settings:
+
+```json
+{
+  "budget": 10,
+  "timeout": 45,
+  "model": "opus",
+  "dryRun": false,
+  "verbose": false,
+  "skipWeb": false,
+  "labels": ["qa", "automated"]
+}
+```
+
+Supported filenames (checked in order): `.testmerc.json`, `.testmerc`, `testme.config.json`
+
+CLI arguments always take precedence over config file values.
+
 ## Environment Variables
 
 ```bash

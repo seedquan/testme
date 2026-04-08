@@ -1,5 +1,5 @@
 import { Command } from "commander";
-import { DEFAULTS, type Config } from "./config.js";
+import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
 
 export function createCli(): Command {
@@ -26,7 +26,10 @@ export function createCli(): Command {
         process.exit(1);
       }
 
-      const githubToken = opts.githubToken || process.env.GITHUB_TOKEN;
+      // Load config file (CLI args take precedence)
+      const fileConfig = loadConfigFile(process.cwd());
+
+      const githubToken = opts.githubToken || fileConfig.githubToken || process.env.GITHUB_TOKEN;
       if (!githubToken) {
         console.error("GitHub token required. Use --github-token or set GITHUB_TOKEN env var.");
         process.exit(1);
@@ -37,29 +40,31 @@ export function createCli(): Command {
         process.exit(1);
       }
 
-      const budget = parseFloat(opts.budget);
+      const budget = parseFloat(opts.budget) || fileConfig.budget || DEFAULTS.budget;
       if (isNaN(budget) || budget <= 0 || budget > 100) {
         console.error("Budget must be between $0.01 and $100.");
         process.exit(1);
       }
 
-      const timeout = parseInt(opts.timeout, 10);
+      const timeout = parseInt(opts.timeout, 10) || fileConfig.timeout || DEFAULTS.timeout;
       if (isNaN(timeout) || timeout < 1 || timeout > 120) {
         console.error("Timeout must be between 1 and 120 minutes.");
         process.exit(1);
       }
 
+      const cliLabels = opts.labels ? opts.labels.split(",").map((l: string) => l.trim()).filter(Boolean) : [];
+
       const config: Config = {
         owner: parsed.owner,
         repo: parsed.repo,
         githubToken,
-        dryRun: opts.dryRun,
+        dryRun: opts.dryRun || fileConfig.dryRun || false,
         budget,
         timeout,
-        model: opts.model,
-        verbose: opts.verbose,
-        skipWeb: opts.skipWeb,
-        labels: opts.labels ? opts.labels.split(",").map((l: string) => l.trim()) : [],
+        model: fileConfig.model && opts.model === DEFAULTS.model ? fileConfig.model : opts.model,
+        verbose: opts.verbose || fileConfig.verbose || false,
+        skipWeb: opts.skipWeb || fileConfig.skipWeb || false,
+        labels: cliLabels.length > 0 ? cliLabels : (fileConfig.labels || []),
       };
 
       await run(config);
