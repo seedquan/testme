@@ -1,6 +1,6 @@
 {
   "name": "testme",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "AI-powered product tester — dogfood any product and file GitHub issues",
   "license": "MIT",
   "repository": {

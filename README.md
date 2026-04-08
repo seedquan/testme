@@ -1,5 +1,9 @@
 # testme
 
+[![CI](https://github.com/seedquan/testme/actions/workflows/ci.yml/badge.svg)](https://github.com/seedquan/testme/actions/workflows/ci.yml)
+[![npm version](https://img.shields.io/npm/v/testme.svg)](https://www.npmjs.com/package/testme)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
 AI-powered product tester — dogfood any product and file GitHub issues automatically.
 
 `testme` acts as a professional beta tester. Point it at a GitHub repo, and it will:
