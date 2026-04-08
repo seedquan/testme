@@ -1,0 +1,47 @@
+FROM debian:bookworm-slim
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# System tools
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    bash \
+    ca-certificates \
+    curl \
+    wget \
+    git \
+    jq \
+    build-essential \
+    python3 \
+    python3-pip \
+    python3-venv \
+    xvfb \
+    fonts-liberation \
+    fonts-noto-color-emoji \
+    chromium \
+    && rm -rf /var/lib/apt/lists/*
+
+# Node.js 22 LTS
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs \
+    && rm -rf /var/lib/apt/lists/*
+
+# Package managers
+RUN npm install -g pnpm yarn
+
+# Claude Code CLI
+RUN npm install -g @anthropic-ai/claude-code
+
+# Playwright with system chromium
+ENV PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=/usr/bin/chromium
+ENV CHROME_PATH=/usr/bin/chromium
+RUN npx playwright install-deps chromium 2>/dev/null || true
+
+# Display for headless browser
+ENV DISPLAY=:99
+
+# Working directory for test runs
+RUN mkdir -p /workspace
+WORKDIR /workspace
+
+# Keep container running — orchestrator uses docker exec
+CMD ["sleep", "infinity"]
