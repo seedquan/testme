@@ -20,9 +20,16 @@ import {
   printSummaryFooter,
 } from "../output/terminal.js";
 import { withRetry } from "../utils/retry.js";
-import { friendlyError, formatElapsed } from "../utils/errors.js";
+import { friendlyError } from "../utils/errors.js";
+import chalk from "chalk";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mkdirSync, writeFileSync } from "node:fs";
+
+// Exit codes: 0=clean, 1=findings found, 2=runtime error
+const EXIT_CLEAN = 0;
+const EXIT_FINDINGS = 1;
+const EXIT_ERROR = 2;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -43,7 +50,7 @@ export async function run(config: Config): Promise<void> {
 
   if (!(await isDockerAvailable())) {
     spinner.fail("Docker is not available. Please install and start Docker.");
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 
   if (!(await imageExists("testme-sandbox:latest"))) {
@@ -55,7 +62,7 @@ export async function run(config: Config): Promise<void> {
     } catch (err) {
       spinner.fail("Failed to build Docker image");
       console.error(err);
-      process.exit(1);
+      process.exit(EXIT_ERROR);
     }
   } else {
     spinner.succeed("Docker ready");
@@ -73,7 +80,7 @@ export async function run(config: Config): Promise<void> {
     );
   } catch (err) {
     fetchSpinner.fail(`Failed to fetch repo context: ${friendlyError(err)}`);
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 
   // Step 2: Generate test plan
@@ -94,7 +101,7 @@ export async function run(config: Config): Promise<void> {
     printTestPlan(testPlan);
   } catch (err) {
     planSpinner.fail(`Failed to generate test plan: ${friendlyError(err)}`);
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 
   // Step 3: Start Docker container (with retry)
@@ -114,7 +121,7 @@ export async function run(config: Config): Promise<void> {
     dockerSpinner.succeed("Docker container running");
   } catch (err) {
     dockerSpinner.fail(`Failed to start Docker container: ${friendlyError(err)}`);
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 
   // Register cleanup
@@ -152,7 +159,7 @@ export async function run(config: Config): Promise<void> {
   } catch (err) {
     testSpinner.fail(`Test execution failed: ${friendlyError(err)}`);
     await cleanup();
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 
   // Warn if Claude Code produced no output
@@ -172,14 +179,18 @@ export async function run(config: Config): Promise<void> {
 
   const elapsed = Date.now() - runStart;
 
+  const repo = `${config.owner}/${config.repo}`;
+
   if (findings.length === 0) {
+    const report = formatJsonReport(repo, [], [], elapsed);
+    saveReport(config, report);
     if (config.json) {
-      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, [], [], elapsed), null, 2));
+      console.log(JSON.stringify(report, null, 2));
     } else {
       console.log("\n  No issues found. The product looks good!");
       printSummaryFooter(elapsed);
     }
-    return;
+    process.exit(EXIT_CLEAN);
   }
 
   // Step 7: Create issues
@@ -188,28 +199,49 @@ export async function run(config: Config): Promise<void> {
       finding: f,
       status: "created" as const,
     }));
+    const report = formatJsonReport(repo, findings, results, elapsed);
+    saveReport(config, report);
     if (config.json) {
-      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results, elapsed), null, 2));
+      console.log(JSON.stringify(report, null, 2));
     } else {
       printResults(results, true);
       printSummaryFooter(elapsed);
     }
+    process.exit(EXIT_FINDINGS);
   } else {
     const issueSpinner = config.json ? null : createSpinner("Creating GitHub issues...");
     try {
       const results = await createIssues(findings, context, config);
       const created = results.filter((r) => r.status === "created").length;
       issueSpinner?.succeed(`Created ${created} issues`);
+      const report = formatJsonReport(repo, findings, results, elapsed);
+      saveReport(config, report);
       if (config.json) {
-        console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results, elapsed), null, 2));
+        console.log(JSON.stringify(report, null, 2));
       } else {
         printResults(results, false);
         printSummaryFooter(elapsed);
       }
+      process.exit(EXIT_FINDINGS);
     } catch (err) {
       issueSpinner?.fail(`Failed to create issues: ${friendlyError(err)}`);
-      process.exit(1);
+      process.exit(EXIT_ERROR);
     }
+  }
+}
+
+function saveReport(config: Config, report: ReturnType<typeof formatJsonReport>): void {
+  try {
+    const dir = resolve(process.cwd(), ".testme-reports");
+    mkdirSync(dir, { recursive: true });
+    const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
+    const filename = `${config.owner}-${config.repo}-${timestamp}.json`;
+    writeFileSync(resolve(dir, filename), JSON.stringify(report, null, 2));
+    if (!config.json) {
+      console.log(chalk.dim(`  Report saved to .testme-reports/${filename}`));
+    }
+  } catch {
+    // Non-critical — don't fail the run if we can't save
   }
 }
 
@@ -226,7 +258,7 @@ async function runPlanOnly(config: Config): Promise<void> {
   } catch (err) {
     fetchSpinner?.fail("Failed to fetch repo context");
     console.error(err);
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 
   const planSpinner = config.json ? null : createSpinner("Generating test plan...");
@@ -249,6 +281,6 @@ async function runPlanOnly(config: Config): Promise<void> {
   } catch (err) {
     planSpinner?.fail("Failed to generate test plan");
     console.error(err);
-    process.exit(1);
+    process.exit(EXIT_ERROR);
   }
 }

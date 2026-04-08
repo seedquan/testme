@@ -96,9 +96,19 @@ Create a `.testmerc.json` in your project root to persist settings:
   "dryRun": false,
   "verbose": false,
   "skipWeb": false,
-  "labels": ["qa", "automated"]
+  "labels": ["qa", "automated"],
+  "customScenarios": [
+    {
+      "name": "Test transaction rollback",
+      "description": "Verify that failed transactions are properly rolled back",
+      "steps": ["Create a transaction", "Force a failure", "Verify rollback"],
+      "category": "cli"
+    }
+  ]
 }
 ```
+
+Custom scenarios are injected into the AI-generated test plan, so you can ensure domain-specific workflows are always tested.
 
 Supported filenames (checked in order): `.testmerc.json`, `.testmerc`, `testme.config.json`
 
@@ -133,6 +143,25 @@ Created issues include:
 - **Labels**: `testme` + `bug`/`enhancement` + `severity:critical|major|minor`
 - **Body**: Description, steps to reproduce, expected vs actual behavior
 - **Deduplication**: Skips issues that are >80% similar to existing open bugs
+
+## Reports
+
+After each run, testme saves a JSON report to `.testme-reports/`. Reports include all findings, issue creation results, and elapsed time.
+
+```bash
+ls .testme-reports/
+# acme-widget-2026-04-08T15-30-00-000Z.json
+```
+
+## Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| `0` | Clean — no issues found |
+| `1` | Findings — issues were found (bugs or UX feedback) |
+| `2` | Error — runtime failure (Docker, API, etc.) |
+
+Useful for CI/CD: `testme owner/repo --dry-run || echo "Issues found!"`
 
 ## First Run
 

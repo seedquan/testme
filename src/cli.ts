@@ -3,6 +3,7 @@ import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
 import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
+import { VERSION } from "./version.js";
 
 const execFile = promisify(execFileCb);
 
@@ -12,7 +13,7 @@ export function createCli(): Command {
   program
     .name("testme")
     .description("AI-powered product tester — dogfood any product and file GitHub issues")
-    .version("0.1.0");
+    .version(VERSION);
 
   // Cleanup subcommand
   program
@@ -98,6 +99,7 @@ export function createCli(): Command {
         labels: cliLabels.length > 0 ? cliLabels : (fileConfig.labels || []),
         json: opts.json || false,
         planOnly: opts.planOnly || false,
+        customScenarios: fileConfig.customScenarios || [],
       };
 
       await run(config);

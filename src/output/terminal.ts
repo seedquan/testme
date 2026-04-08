@@ -2,6 +2,7 @@ import chalk from "chalk";
 import ora, { type Ora } from "ora";
 import type { Finding, IssueResult, TestPlan } from "../config.js";
 import { formatElapsed } from "../utils/errors.js";
+import { VERSION } from "../version.js";
 
 export function createSpinner(text: string): Ora {
   return ora({ text, color: "cyan" }).start();
@@ -9,7 +10,7 @@ export function createSpinner(text: string): Ora {
 
 export function printHeader(): void {
   console.log();
-  console.log(chalk.bold.cyan("  testme") + chalk.dim(" v0.1.0 — AI-powered product tester"));
+  console.log(chalk.bold.cyan("  testme") + chalk.dim(` v${VERSION} — AI-powered product tester`));
   console.log();
 }
 

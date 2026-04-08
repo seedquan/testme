@@ -32,6 +32,11 @@ export async function generateTestPlan(
     throw new Error("Failed to extract test plan from Claude response");
   }
 
+  // Inject custom scenarios from config
+  if (config.customScenarios.length > 0) {
+    plan.testScenarios.push(...config.customScenarios);
+  }
+
   return plan;
 }
 

@@ -14,6 +14,7 @@ export interface Config {
   labels: string[];
   json: boolean;
   planOnly: boolean;
+  customScenarios: CustomScenario[];
 }
 
 export interface RepoContext {
@@ -67,6 +68,13 @@ export const DEFAULTS = {
   dockerImage: "testme-sandbox:latest",
 } as const;
 
+export interface CustomScenario {
+  name: string;
+  description: string;
+  steps: string[];
+  category: "installation" | "cli" | "web-ui" | "api" | "docs";
+}
+
 export interface ConfigFile {
   githubToken?: string;
   dryRun?: boolean;
@@ -76,6 +84,7 @@ export interface ConfigFile {
   verbose?: boolean;
   skipWeb?: boolean;
   labels?: string[];
+  customScenarios?: CustomScenario[];
 }
 
 export const CONFIG_FILENAMES = [".testmerc.json", ".testmerc", "testme.config.json"];
