@@ -1,5 +1,8 @@
 import { spawn, execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { writeFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import type { Config } from "../config.js";
 
 const execFile = promisify(execFileCb);
@@ -18,6 +21,12 @@ export async function createAndStartContainer(
     );
   }
 
+  // Write API key to a temp env file to avoid exposing it in docker inspect / ps
+  const envFilePath = join(tmpdir(), `testme-env-${Date.now()}`);
+  writeFileSync(envFilePath, `ANTHROPIC_API_KEY=${apiKey}\nDISPLAY=:99\n`, {
+    mode: 0o600,
+  });
+
   const args = [
     "run",
     "-d",
@@ -25,13 +34,19 @@ export async function createAndStartContainer(
     "--memory", "4g",
     "--cpus", "2",
     "--pids-limit", "512",
-    "-e", `ANTHROPIC_API_KEY=${apiKey}`,
-    "-e", "DISPLAY=:99",
+    "--env-file", envFilePath,
     "--label", "testme.run=1",
     "testme-sandbox:latest",
   ];
 
-  const { stdout } = await execFile("docker", args);
+  let stdout: string;
+  try {
+    const result = await execFile("docker", args);
+    stdout = result.stdout;
+  } finally {
+    // Clean up env file immediately — no longer needed after container start
+    try { unlinkSync(envFilePath); } catch { /* already gone */ }
+  }
   const id = stdout.trim();
 
   // Verify container is actually running

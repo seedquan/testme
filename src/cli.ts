@@ -18,6 +18,8 @@ export function createCli(): Command {
     .option("--verbose", "stream Claude Code live output", false)
     .option("--skip-web", "skip web UI testing", false)
     .option("--labels <labels>", "extra labels for created issues (comma-separated)", "")
+    .option("--json", "output results as JSON to stdout", false)
+    .option("--plan-only", "generate test plan and exit (no Docker needed)", false)
     .action(async (repoUrl: string, opts) => {
       const parsed = parseRepoUrl(repoUrl);
       if (!parsed) {
@@ -35,7 +37,7 @@ export function createCli(): Command {
         process.exit(1);
       }
 
-      if (!process.env.ANTHROPIC_API_KEY) {
+      if (!opts.planOnly && !process.env.ANTHROPIC_API_KEY) {
         console.error("ANTHROPIC_API_KEY env var required for Claude Code inside Docker.");
         process.exit(1);
       }
@@ -65,6 +67,8 @@ export function createCli(): Command {
         verbose: opts.verbose || fileConfig.verbose || false,
         skipWeb: opts.skipWeb || fileConfig.skipWeb || false,
         labels: cliLabels.length > 0 ? cliLabels : (fileConfig.labels || []),
+        json: opts.json || false,
+        planOnly: opts.planOnly || false,
       };
 
       await run(config);

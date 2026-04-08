@@ -53,6 +53,8 @@ testme https://github.com/owner/repo \
 | `--verbose` | `false` | Stream Claude Code's live output |
 | `--skip-web` | `false` | Skip web UI testing |
 | `--labels <labels>` | | Extra issue labels (comma-separated) |
+| `--json` | `false` | Output results as JSON (for CI/scripting) |
+| `--plan-only` | `false` | Generate test plan and exit (no Docker needed) |
 
 ## Config File
 

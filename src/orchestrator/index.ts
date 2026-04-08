@@ -16,6 +16,7 @@ import {
   printTestPlan,
   printResults,
   createSpinner,
+  formatJsonReport,
 } from "../output/terminal.js";
 import { withRetry } from "../utils/retry.js";
 import { resolve, dirname } from "node:path";
@@ -24,7 +25,14 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export async function run(config: Config): Promise<void> {
-  printHeader();
+  if (!config.json) {
+    printHeader();
+  }
+
+  // Plan-only mode: skip Docker entirely
+  if (config.planOnly) {
+    return runPlanOnly(config);
+  }
 
   // Preflight checks
   const spinner = createSpinner("Checking Docker...");
@@ -149,7 +157,11 @@ export async function run(config: Config): Promise<void> {
   await cleanup();
 
   if (findings.length === 0) {
-    console.log("\n  No issues found. The product looks good!");
+    if (config.json) {
+      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, [], []), null, 2));
+    } else {
+      console.log("\n  No issues found. The product looks good!");
+    }
     return;
   }
 
@@ -159,18 +171,66 @@ export async function run(config: Config): Promise<void> {
       finding: f,
       status: "created" as const,
     }));
-    printResults(results, true);
+    if (config.json) {
+      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results), null, 2));
+    } else {
+      printResults(results, true);
+    }
   } else {
-    const issueSpinner = createSpinner("Creating GitHub issues...");
+    const issueSpinner = config.json ? null : createSpinner("Creating GitHub issues...");
     try {
       const results = await createIssues(findings, context, config);
       const created = results.filter((r) => r.status === "created").length;
-      issueSpinner.succeed(`Created ${created} issues`);
-      printResults(results, false);
+      issueSpinner?.succeed(`Created ${created} issues`);
+      if (config.json) {
+        console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results), null, 2));
+      } else {
+        printResults(results, false);
+      }
     } catch (err) {
-      issueSpinner.fail("Failed to create issues");
+      issueSpinner?.fail("Failed to create issues");
       console.error(err);
       process.exit(1);
     }
+  }
+}
+
+async function runPlanOnly(config: Config): Promise<void> {
+  const fetchSpinner = config.json ? null : createSpinner(
+    `Fetching repo context for ${config.owner}/${config.repo}...`
+  );
+  let context;
+  try {
+    context = await fetchRepoContext(config);
+    fetchSpinner?.succeed(
+      `Repo context fetched (README: ${context.readme.length} chars)`
+    );
+  } catch (err) {
+    fetchSpinner?.fail("Failed to fetch repo context");
+    console.error(err);
+    process.exit(1);
+  }
+
+  const planSpinner = config.json ? null : createSpinner("Generating test plan...");
+  try {
+    const testPlan = await generateTestPlan(context, config);
+    planSpinner?.succeed(
+      `Test plan ready (${testPlan.testScenarios.length} scenarios)`
+    );
+
+    if (config.json) {
+      console.log(JSON.stringify({ repo: `${config.owner}/${config.repo}`, plan: testPlan }, null, 2));
+    } else {
+      printTestPlan(testPlan);
+      console.log("  Scenarios:");
+      for (const s of testPlan.testScenarios) {
+        console.log(`    - ${s.name} (${s.category}): ${s.description}`);
+      }
+      console.log();
+    }
+  } catch (err) {
+    planSpinner?.fail("Failed to generate test plan");
+    console.error(err);
+    process.exit(1);
   }
 }

@@ -106,6 +106,36 @@ function getSeverityColor(severity: string) {
   }
 }
 
+export interface JsonReport {
+  repo: string;
+  findings: Finding[];
+  results: IssueResult[];
+  summary: {
+    total: number;
+    created: number;
+    skipped: number;
+    failed: number;
+  };
+}
+
+export function formatJsonReport(
+  repo: string,
+  findings: Finding[],
+  results: IssueResult[]
+): JsonReport {
+  return {
+    repo,
+    findings,
+    results,
+    summary: {
+      total: results.length,
+      created: results.filter((r) => r.status === "created").length,
+      skipped: results.filter((r) => r.status === "skipped-duplicate").length,
+      failed: results.filter((r) => r.status === "failed").length,
+    },
+  };
+}
+
 function padRight(str: string, len: number): string {
   return str.length >= len ? str.slice(0, len) : str + " ".repeat(len - str.length);
 }

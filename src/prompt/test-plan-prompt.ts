@@ -15,7 +15,7 @@ ${context.latestRelease ? `**Latest Release:** ${context.latestRelease.tag} (${c
 
 ## README
 
-${context.readme.slice(0, 30000)}
+${context.readme ? context.readme.slice(0, 30000) : "_No README found. Use the repository description and any project files below to infer how to install and use this product._"}
 
 ${installFilesSection ? `## Project Files\n\n${installFilesSection}` : ""}
 

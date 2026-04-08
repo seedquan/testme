@@ -20,7 +20,7 @@ ${context.description}
 
 ## README
 
-${context.readme.slice(0, 30000)}
+${context.readme ? context.readme.slice(0, 30000) : "_No README found. Rely on the test plan below and explore the product's help/usage commands to understand how to use it._"}
 
 ## Test Plan
 

@@ -12,6 +12,8 @@ export interface Config {
   verbose: boolean;
   skipWeb: boolean;
   labels: string[];
+  json: boolean;
+  planOnly: boolean;
 }
 
 export interface RepoContext {
