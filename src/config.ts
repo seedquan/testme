@@ -96,8 +96,10 @@ export function loadConfigFile(cwd: string): ConfigFile {
       try {
         const raw = readFileSync(filepath, "utf-8");
         return JSON.parse(raw) as ConfigFile;
-      } catch {
-        // Invalid JSON, skip
+      } catch (err) {
+        console.error(
+          `Warning: Failed to parse ${filename}: ${err instanceof Error ? err.message : String(err)}`
+        );
       }
     }
   }

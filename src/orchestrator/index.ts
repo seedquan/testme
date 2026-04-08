@@ -124,8 +124,11 @@ export async function run(config: Config): Promise<void> {
     process.exit(EXIT_ERROR);
   }
 
-  // Register cleanup
+  // Register cleanup (idempotent — safe to call multiple times)
+  let cleaned = false;
   const cleanup = async () => {
+    if (cleaned) return;
+    cleaned = true;
     await stopAndRemove(container.id).catch(() => {});
   };
   process.on("SIGINT", async () => {

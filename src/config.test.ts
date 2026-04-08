@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { loadConfigFile } from "./config.js";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
@@ -64,7 +64,8 @@ describe("loadConfigFile", () => {
     expect(config.budget).toBe(10);
   });
 
-  it("skips invalid JSON and tries next file", () => {
+  it("warns on invalid JSON and tries next file", () => {
+    const spy = vi.spyOn(console, "error").mockImplementation(() => {});
     writeFileSync(join(tempDir, ".testmerc.json"), "not json {{{");
     writeFileSync(
       join(tempDir, ".testmerc"),
@@ -72,5 +73,23 @@ describe("loadConfigFile", () => {
     );
     const config = loadConfigFile(tempDir);
     expect(config.budget).toBe(15);
+    expect(spy).toHaveBeenCalledWith(
+      expect.stringContaining("Warning: Failed to parse .testmerc.json")
+    );
+    spy.mockRestore();
+  });
+
+  it("loads customScenarios from config", () => {
+    writeFileSync(
+      join(tempDir, ".testmerc.json"),
+      JSON.stringify({
+        customScenarios: [
+          { name: "Test rollback", description: "Verify rollback", steps: ["step1"], category: "cli" }
+        ]
+      })
+    );
+    const config = loadConfigFile(tempDir);
+    expect(config.customScenarios).toHaveLength(1);
+    expect(config.customScenarios![0].name).toBe("Test rollback");
   });
 });
