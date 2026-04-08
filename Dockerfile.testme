@@ -39,8 +39,12 @@ RUN npx playwright install-deps chromium 2>/dev/null || true
 # Display for headless browser
 ENV DISPLAY=:99
 
-# Working directory for test runs
-RUN mkdir -p /workspace
+# Create non-root user for security
+RUN useradd -m -s /bin/bash tester
+RUN mkdir -p /workspace && chown tester:tester /workspace
+
+# Switch to non-root user
+USER tester
 WORKDIR /workspace
 
 # Keep container running — orchestrator uses docker exec

@@ -32,13 +32,30 @@ export function createCli(): Command {
         process.exit(1);
       }
 
+      if (!process.env.ANTHROPIC_API_KEY) {
+        console.error("ANTHROPIC_API_KEY env var required for Claude Code inside Docker.");
+        process.exit(1);
+      }
+
+      const budget = parseFloat(opts.budget);
+      if (isNaN(budget) || budget <= 0 || budget > 100) {
+        console.error("Budget must be between $0.01 and $100.");
+        process.exit(1);
+      }
+
+      const timeout = parseInt(opts.timeout, 10);
+      if (isNaN(timeout) || timeout < 1 || timeout > 120) {
+        console.error("Timeout must be between 1 and 120 minutes.");
+        process.exit(1);
+      }
+
       const config: Config = {
         owner: parsed.owner,
         repo: parsed.repo,
         githubToken,
         dryRun: opts.dryRun,
-        budget: parseFloat(opts.budget),
-        timeout: parseInt(opts.timeout, 10),
+        budget,
+        timeout,
         model: opts.model,
         verbose: opts.verbose,
         skipWeb: opts.skipWeb,

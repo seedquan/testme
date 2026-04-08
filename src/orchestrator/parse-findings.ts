@@ -17,12 +17,15 @@ export function parseFindings(rawOutput: string): Finding[] {
     }
   }
 
-  // Fallback: look for any JSON array in the output
-  const jsonArrayMatches = rawOutput.match(/\[[\s\S]*?\]/g);
-  if (jsonArrayMatches) {
-    for (const match of jsonArrayMatches) {
+  // Fallback: try to find JSON arrays by locating '[' and parsing progressively
+  for (let i = 0; i < rawOutput.length; i++) {
+    if (rawOutput[i] !== "[") continue;
+    // Try parsing from each '[' to find valid JSON arrays
+    for (let j = rawOutput.length; j > i; j--) {
+      if (rawOutput[j - 1] !== "]") continue;
+      const candidate = rawOutput.slice(i, j);
       try {
-        const parsed = JSON.parse(match);
+        const parsed = JSON.parse(candidate);
         if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].title) {
           return parsed.filter(isValidFinding);
         }

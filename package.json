@@ -2,6 +2,19 @@
   "name": "testme",
   "version": "0.1.0",
   "description": "AI-powered product tester — dogfood any product and file GitHub issues",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/seedquan/testme"
+  },
+  "homepage": "https://github.com/seedquan/testme#readme",
+  "bugs": {
+    "url": "https://github.com/seedquan/testme/issues"
+  },
+  "keywords": ["testing", "ai", "claude", "docker", "github", "qa", "automation"],
+  "engines": {
+    "node": ">=18"
+  },
   "type": "module",
   "bin": {
     "testme": "dist/index.js"
