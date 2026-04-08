@@ -1,6 +1,10 @@
 import { Command } from "commander";
+import { execFile as execFileCb } from "node:child_process";
+import { promisify } from "node:util";
 import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
+
+const execFile = promisify(execFileCb);
 
 export function createCli(): Command {
   const program = new Command();
@@ -8,7 +12,32 @@ export function createCli(): Command {
   program
     .name("testme")
     .description("AI-powered product tester — dogfood any product and file GitHub issues")
-    .version("0.1.0")
+    .version("0.1.0");
+
+  // Cleanup subcommand
+  program
+    .command("cleanup")
+    .description("Remove stale Docker containers from previous testme runs")
+    .action(async () => {
+      try {
+        const { stdout } = await execFile("docker", [
+          "ps", "-a", "-q", "-f", "label=testme.run=1",
+        ]);
+        const ids = stdout.trim().split("\n").filter(Boolean);
+        if (ids.length === 0) {
+          console.log("No stale testme containers found.");
+          return;
+        }
+        await execFile("docker", ["rm", "-f", ...ids]);
+        console.log(`Removed ${ids.length} stale container(s).`);
+      } catch (err) {
+        console.error("Failed to clean up containers. Is Docker running?");
+        process.exit(1);
+      }
+    });
+
+  // Main test command (default)
+  program
     .argument("<repo-url>", "GitHub repository URL (e.g. https://github.com/owner/repo)")
     .option("-t, --github-token <token>", "GitHub PAT (or set GITHUB_TOKEN env var)")
     .option("--dry-run", "show findings without creating issues", false)

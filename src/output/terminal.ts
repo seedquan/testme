@@ -1,6 +1,7 @@
 import chalk from "chalk";
 import ora, { type Ora } from "ora";
 import type { Finding, IssueResult, TestPlan } from "../config.js";
+import { formatElapsed } from "../utils/errors.js";
 
 export function createSpinner(text: string): Ora {
   return ora({ text, color: "cyan" }).start();
@@ -116,12 +117,14 @@ export interface JsonReport {
     skipped: number;
     failed: number;
   };
+  elapsedMs?: number;
 }
 
 export function formatJsonReport(
   repo: string,
   findings: Finding[],
-  results: IssueResult[]
+  results: IssueResult[],
+  elapsedMs?: number
 ): JsonReport {
   return {
     repo,
@@ -133,7 +136,13 @@ export function formatJsonReport(
       skipped: results.filter((r) => r.status === "skipped-duplicate").length,
       failed: results.filter((r) => r.status === "failed").length,
     },
+    ...(elapsedMs !== undefined && { elapsedMs }),
   };
+}
+
+export function printSummaryFooter(elapsedMs: number): void {
+  console.log(chalk.dim(`  Completed in ${formatElapsed(elapsedMs)}`));
+  console.log();
 }
 
 function padRight(str: string, len: number): string {

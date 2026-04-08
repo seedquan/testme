@@ -17,14 +17,18 @@ import {
   printResults,
   createSpinner,
   formatJsonReport,
+  printSummaryFooter,
 } from "../output/terminal.js";
 import { withRetry } from "../utils/retry.js";
+import { friendlyError, formatElapsed } from "../utils/errors.js";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 export async function run(config: Config): Promise<void> {
+  const runStart = Date.now();
+
   if (!config.json) {
     printHeader();
   }
@@ -68,8 +72,7 @@ export async function run(config: Config): Promise<void> {
       `Repo context fetched (README: ${context.readme.length} chars, ${context.existingIssues.length} existing issues)`
     );
   } catch (err) {
-    fetchSpinner.fail("Failed to fetch repo context");
-    console.error(err);
+    fetchSpinner.fail(`Failed to fetch repo context: ${friendlyError(err)}`);
     process.exit(1);
   }
 
@@ -78,13 +81,19 @@ export async function run(config: Config): Promise<void> {
   let testPlan;
   try {
     testPlan = await generateTestPlan(context, config);
+    if (testPlan.testScenarios.length === 0) {
+      planSpinner.warn("Test plan generated but has 0 scenarios — nothing to test");
+      if (!config.json) {
+        console.log("  The product may lack documentation or installable artifacts.");
+      }
+      return;
+    }
     planSpinner.succeed(
       `Test plan ready (${testPlan.testScenarios.length} scenarios)`
     );
     printTestPlan(testPlan);
   } catch (err) {
-    planSpinner.fail("Failed to generate test plan");
-    console.error(err);
+    planSpinner.fail(`Failed to generate test plan: ${friendlyError(err)}`);
     process.exit(1);
   }
 
@@ -104,8 +113,7 @@ export async function run(config: Config): Promise<void> {
     );
     dockerSpinner.succeed("Docker container running");
   } catch (err) {
-    dockerSpinner.fail("Failed to start Docker container after 3 attempts");
-    console.error(err);
+    dockerSpinner.fail(`Failed to start Docker container: ${friendlyError(err)}`);
     process.exit(1);
   }
 
@@ -142,10 +150,16 @@ export async function run(config: Config): Promise<void> {
       testSpinner.warn("Tests completed with issues");
     }
   } catch (err) {
-    testSpinner.fail("Test execution failed");
-    console.error(err);
+    testSpinner.fail(`Test execution failed: ${friendlyError(err)}`);
     await cleanup();
     process.exit(1);
+  }
+
+  // Warn if Claude Code produced no output
+  if (!executionResult.rawOutput || executionResult.rawOutput.length < 50) {
+    if (!config.json) {
+      console.log("  Warning: Claude Code produced little or no output — it may have crashed or timed out.");
+    }
   }
 
   // Step 5: Parse findings
@@ -156,11 +170,14 @@ export async function run(config: Config): Promise<void> {
   // Step 6: Cleanup Docker
   await cleanup();
 
+  const elapsed = Date.now() - runStart;
+
   if (findings.length === 0) {
     if (config.json) {
-      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, [], []), null, 2));
+      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, [], [], elapsed), null, 2));
     } else {
       console.log("\n  No issues found. The product looks good!");
+      printSummaryFooter(elapsed);
     }
     return;
   }
@@ -172,9 +189,10 @@ export async function run(config: Config): Promise<void> {
       status: "created" as const,
     }));
     if (config.json) {
-      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results), null, 2));
+      console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results, elapsed), null, 2));
     } else {
       printResults(results, true);
+      printSummaryFooter(elapsed);
     }
   } else {
     const issueSpinner = config.json ? null : createSpinner("Creating GitHub issues...");
@@ -183,13 +201,13 @@ export async function run(config: Config): Promise<void> {
       const created = results.filter((r) => r.status === "created").length;
       issueSpinner?.succeed(`Created ${created} issues`);
       if (config.json) {
-        console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results), null, 2));
+        console.log(JSON.stringify(formatJsonReport(`${config.owner}/${config.repo}`, findings, results, elapsed), null, 2));
       } else {
         printResults(results, false);
+        printSummaryFooter(elapsed);
       }
     } catch (err) {
-      issueSpinner?.fail("Failed to create issues");
-      console.error(err);
+      issueSpinner?.fail(`Failed to create issues: ${friendlyError(err)}`);
       process.exit(1);
     }
   }

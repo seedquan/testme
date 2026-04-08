@@ -20,7 +20,7 @@
     "testme": "dist/index.js"
   },
   "scripts": {
-    "build": "tsup src/index.ts --format esm --dts",
+    "build": "tsup src/index.ts --format esm --dts && chmod +x dist/index.js",
     "dev": "tsx src/index.ts",
     "test": "vitest run"
   },
