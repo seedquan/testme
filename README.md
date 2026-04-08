@@ -76,6 +76,14 @@ testme https://github.com/owner/repo --plan-only
 testme https://github.com/owner/repo --dry-run --json > results.json
 ```
 
+### View past reports
+
+```bash
+testme reports
+```
+
+Lists all saved test reports from `.testme-reports/` with repo name, finding count, and elapsed time.
+
 ### Clean up stale Docker containers
 
 ```bash
@@ -162,6 +170,38 @@ ls .testme-reports/
 | `2` | Error — runtime failure (Docker, API, etc.) |
 
 Useful for CI/CD: `testme owner/repo --dry-run || echo "Issues found!"`
+
+## GitHub Actions
+
+Use testme in your CI pipeline to automatically test products:
+
+```yaml
+name: Product Test
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Weekly on Monday
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install -g testme
+      - run: docker build -t testme-sandbox:latest -f node_modules/testme/Dockerfile.testme .
+      - name: Run testme
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: testme ${{ github.repository }} --dry-run --json > report.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: testme-report
+          path: report.json
+```
 
 ## First Run
 

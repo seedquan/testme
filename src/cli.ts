@@ -1,9 +1,12 @@
 import { Command } from "commander";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
 import { VERSION } from "./version.js";
+import type { JsonReport } from "./output/terminal.js";
 
 const execFile = promisify(execFileCb);
 
@@ -35,6 +38,49 @@ export function createCli(): Command {
         console.error("Failed to clean up containers. Is Docker running?");
         process.exit(1);
       }
+    });
+
+  // Reports subcommand
+  program
+    .command("reports")
+    .description("List past test reports from .testme-reports/")
+    .option("--dir <path>", "reports directory", ".testme-reports")
+    .action((opts) => {
+      const dir = resolve(process.cwd(), opts.dir);
+      if (!existsSync(dir)) {
+        console.log("No reports found. Run testme against a repo first.");
+        return;
+      }
+      const files = readdirSync(dir)
+        .filter((f: string) => f.endsWith(".json"))
+        .sort()
+        .reverse();
+
+      if (files.length === 0) {
+        console.log("No reports found.");
+        return;
+      }
+
+      console.log(`\n  ${files.length} report(s) in ${opts.dir}/\n`);
+      for (const file of files) {
+        try {
+          const raw = readFileSync(resolve(dir, file), "utf-8");
+          const report = JSON.parse(raw) as JsonReport;
+          const findings = report.summary?.total ?? 0;
+          const elapsed = report.elapsedMs
+            ? `${Math.round(report.elapsedMs / 1000)}s`
+            : "?";
+          console.log(
+            `  ${file}`
+          );
+          console.log(
+            `    ${report.repo} — ${findings} finding(s), ${elapsed}`
+          );
+        } catch {
+          console.log(`  ${file} (unreadable)`);
+        }
+      }
+      console.log();
     });
 
   // Main test command (default)
