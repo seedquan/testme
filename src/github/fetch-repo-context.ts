@@ -15,7 +15,7 @@ export async function fetchRepoContext(config: Config): Promise<RepoContext> {
         repo,
         labels: "bug",
         state: "open",
-        per_page: 50,
+        per_page: 100,
       }).catch(() => ({ data: [] })),
       octokit.repos.getLatestRelease({ owner, repo }).catch(() => null),
       octokit.repos.getContent({ owner, repo, path: "" }).catch(() => null),

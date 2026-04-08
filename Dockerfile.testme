@@ -43,6 +43,9 @@ ENV DISPLAY=:99
 RUN useradd -m -s /bin/bash tester
 RUN mkdir -p /workspace && chown tester:tester /workspace
 
+# Verify global tools are accessible from PATH
+RUN claude --version || echo "Warning: claude not in PATH"
+
 # Switch to non-root user
 USER tester
 WORKDIR /workspace

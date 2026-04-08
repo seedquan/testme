@@ -1,5 +1,6 @@
 import { Octokit } from "@octokit/rest";
 import type { Config, Finding, IssueResult, RepoContext } from "../config.js";
+import { withRetry } from "../utils/retry.js";
 
 export async function createIssues(
   findings: Finding[],
@@ -8,6 +9,11 @@ export async function createIssues(
 ): Promise<IssueResult[]> {
   const octokit = new Octokit({ auth: config.githubToken });
   const results: IssueResult[] = [];
+
+  // Ensure all needed labels exist on the repo
+  if (!config.dryRun) {
+    await ensureLabelsExist(octokit, config, findings);
+  }
 
   for (const finding of findings) {
     // Check for duplicates
@@ -30,13 +36,17 @@ export async function createIssues(
       const labels = buildLabels(finding, config.labels);
       const body = formatIssueBody(finding);
 
-      const issue = await octokit.issues.create({
-        owner: config.owner,
-        repo: config.repo,
-        title: finding.title,
-        body,
-        labels,
-      });
+      const issue = await withRetry(
+        () =>
+          octokit.issues.create({
+            owner: config.owner,
+            repo: config.repo,
+            title: finding.title,
+            body,
+            labels,
+          }),
+        { maxAttempts: 3, delayMs: 2000 }
+      );
 
       results.push({
         finding,
@@ -109,6 +119,59 @@ function levenshtein(a: string, b: string): number {
   return matrix[b.length][a.length];
 }
 
+const LABEL_COLORS: Record<string, string> = {
+  testme: "7057ff",
+  bug: "d73a4a",
+  enhancement: "a2eeef",
+  "severity:critical": "b60205",
+  "severity:major": "e99695",
+  "severity:minor": "f9d0c4",
+  "severity:suggestion": "c5def5",
+};
+
+async function ensureLabelsExist(
+  octokit: InstanceType<typeof Octokit>,
+  config: Config,
+  findings: Finding[]
+): Promise<void> {
+  // Collect all labels we'll need
+  const neededLabels = new Set<string>();
+  for (const finding of findings) {
+    for (const label of buildLabels(finding, config.labels)) {
+      neededLabels.add(label);
+    }
+  }
+
+  // Fetch existing labels
+  let existingLabels: Set<string>;
+  try {
+    const { data } = await octokit.issues.listLabelsForRepo({
+      owner: config.owner,
+      repo: config.repo,
+      per_page: 100,
+    });
+    existingLabels = new Set(data.map((l) => l.name));
+  } catch {
+    return; // If we can't list labels, issue creation will handle errors
+  }
+
+  // Create missing labels
+  for (const label of neededLabels) {
+    if (!existingLabels.has(label)) {
+      try {
+        await octokit.issues.createLabel({
+          owner: config.owner,
+          repo: config.repo,
+          name: label,
+          color: LABEL_COLORS[label] || "ededed",
+        });
+      } catch {
+        // Label may have been created concurrently, or we lack permission — continue
+      }
+    }
+  }
+}
+
 function buildLabels(finding: Finding, extraLabels: string[]): string[] {
   const labels = ["testme"];
 
@@ -151,5 +214,5 @@ ${finding.actual}
 ${finding.environment ? `## Environment\n\n${finding.environment}\n` : ""}
 ---
 
-*This issue was found by [testme](https://github.com/anthropics/testme) — an AI-powered product tester.*`;
+*This issue was found by [testme](https://github.com/seedquan/testme) — an AI-powered product tester.*`;
 }

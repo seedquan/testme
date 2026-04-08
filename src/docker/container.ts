@@ -1,5 +1,6 @@
 import { spawn, execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
+import { randomBytes } from "node:crypto";
 import { writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -30,7 +31,7 @@ export async function createAndStartContainer(
   const args = [
     "run",
     "-d",
-    "--name", `testme-${Date.now()}`,
+    "--name", `testme-${Date.now()}-${randomBytes(4).toString("hex")}`,
     "--memory", "4g",
     "--cpus", "2",
     "--pids-limit", "512",
