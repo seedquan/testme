@@ -17,6 +17,7 @@ import {
   printResults,
   createSpinner,
   formatJsonReport,
+  formatMarkdownReport,
   printSummaryFooter,
 } from "../output/terminal.js";
 import { withRetry } from "../utils/retry.js";
@@ -238,10 +239,16 @@ function saveReport(config: Config, report: ReturnType<typeof formatJsonReport>)
     const dir = resolve(process.cwd(), ".testme-reports");
     mkdirSync(dir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
-    const filename = `${config.owner}-${config.repo}-${timestamp}.json`;
-    writeFileSync(resolve(dir, filename), JSON.stringify(report, null, 2));
+    const baseName = `${config.owner}-${config.repo}-${timestamp}`;
+
+    // Save JSON report
+    writeFileSync(resolve(dir, `${baseName}.json`), JSON.stringify(report, null, 2));
+
+    // Save markdown report for human readability
+    writeFileSync(resolve(dir, `${baseName}.md`), formatMarkdownReport(report));
+
     if (!config.json) {
-      console.log(chalk.dim(`  Report saved to .testme-reports/${filename}`));
+      console.log(chalk.dim(`  Reports saved to .testme-reports/${baseName}.{json,md}`));
     }
   } catch {
     // Non-critical — don't fail the run if we can't save

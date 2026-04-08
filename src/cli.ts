@@ -1,7 +1,7 @@
 import { Command } from "commander";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { readdirSync, readFileSync, existsSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
@@ -17,6 +17,31 @@ export function createCli(): Command {
     .name("testme")
     .description("AI-powered product tester — dogfood any product and file GitHub issues")
     .version(VERSION);
+
+  // Init subcommand
+  program
+    .command("init")
+    .description("Create a .testmerc.json config file in the current directory")
+    .action(() => {
+      const filepath = resolve(process.cwd(), ".testmerc.json");
+      if (existsSync(filepath)) {
+        console.error(".testmerc.json already exists. Delete it first to re-initialize.");
+        process.exit(1);
+      }
+      const template = {
+        budget: DEFAULTS.budget,
+        timeout: DEFAULTS.timeout,
+        model: DEFAULTS.model,
+        dryRun: false,
+        verbose: false,
+        skipWeb: false,
+        labels: [],
+        customScenarios: [],
+      };
+      writeFileSync(filepath, JSON.stringify(template, null, 2) + "\n");
+      console.log("Created .testmerc.json with default settings.");
+      console.log("Edit it to customize budget, timeout, model, labels, and custom test scenarios.");
+    });
 
   // Cleanup subcommand
   program

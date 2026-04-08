@@ -64,6 +64,14 @@ testme https://github.com/owner/repo \
 testme https://github.com/owner/repo
 ```
 
+### Initialize config file
+
+```bash
+testme init
+```
+
+Creates a `.testmerc.json` with default settings. Edit it to customize budget, model, labels, and custom test scenarios.
+
 ### Preview the test plan (no Docker needed)
 
 ```bash
@@ -154,12 +162,15 @@ Created issues include:
 
 ## Reports
 
-After each run, testme saves a JSON report to `.testme-reports/`. Reports include all findings, issue creation results, and elapsed time.
+After each run, testme saves both a JSON and Markdown report to `.testme-reports/`:
 
 ```bash
 ls .testme-reports/
-# acme-widget-2026-04-08T15-30-00-000Z.json
+# acme-widget-2026-04-08T15-30-00-000Z.json   ← machine-readable
+# acme-widget-2026-04-08T15-30-00-000Z.md     ← human-readable
 ```
+
+The markdown report includes findings with severity, steps to reproduce, and an issue summary table — shareable with non-technical stakeholders.
 
 ## Exit Codes
 
