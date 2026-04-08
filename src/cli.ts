@@ -1,9 +1,9 @@
 import { Command } from "commander";
 import { execFile as execFileCb } from "node:child_process";
 import { promisify } from "node:util";
-import { readdirSync, readFileSync, existsSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, existsSync, writeFileSync, rmSync } from "node:fs";
 import { resolve } from "node:path";
-import { DEFAULTS, loadConfigFile, type Config } from "./config.js";
+import { DEFAULTS, loadConfigFile, ensureHomeDir, HOME_DIR, HOME_CONFIG_PATH, HOME_REPORTS_DIR, type Config } from "./config.js";
 import { run } from "./orchestrator/index.js";
 import { VERSION } from "./version.js";
 import type { JsonReport } from "./output/terminal.js";
@@ -23,26 +23,82 @@ export function createCli(): Command {
   // Init subcommand
   program
     .command("init")
-    .description("Create a .testmerc.json config file in the current directory")
-    .action(() => {
-      const filepath = resolve(process.cwd(), ".testmerc.json");
-      if (existsSync(filepath)) {
-        console.error(".testmerc.json already exists. Delete it first to re-initialize.");
-        process.exit(1);
+    .description("Set up testme: create config, check dependencies")
+    .option("--local", "create .testmerc.json in current directory only", false)
+    .action(async (opts: { local: boolean }) => {
+      console.log();
+      console.log(chalk.bold("  testme init"));
+      console.log();
+
+      // Step 1: Create home directory
+      if (!opts.local) {
+        ensureHomeDir();
+        console.log(chalk.green(`  ✓ Home directory: ${HOME_DIR}`));
       }
-      const template = {
-        budget: DEFAULTS.budget,
-        timeout: DEFAULTS.timeout,
-        model: DEFAULTS.model,
-        dryRun: false,
-        verbose: false,
-        skipWeb: false,
-        labels: [],
-        customScenarios: [],
-      };
-      writeFileSync(filepath, JSON.stringify(template, null, 2) + "\n");
-      console.log("Created .testmerc.json with default settings.");
-      console.log("Edit it to customize budget, timeout, model, labels, and custom test scenarios.");
+
+      // Step 2: Create config file
+      const configPath = opts.local
+        ? resolve(process.cwd(), ".testmerc.json")
+        : HOME_CONFIG_PATH;
+      const configName = opts.local ? ".testmerc.json" : HOME_CONFIG_PATH;
+
+      if (existsSync(configPath)) {
+        console.log(chalk.yellow(`  ⚠ Config already exists: ${configName}`));
+      } else {
+        const template = {
+          budget: DEFAULTS.budget,
+          timeout: DEFAULTS.timeout,
+          model: DEFAULTS.model,
+          dryRun: false,
+          verbose: false,
+          skipWeb: false,
+          labels: [],
+          customScenarios: [],
+        };
+        writeFileSync(configPath, JSON.stringify(template, null, 2) + "\n");
+        console.log(chalk.green(`  ✓ Config created: ${configName}`));
+      }
+
+      // Step 3: Check dependencies
+      console.log();
+      console.log(chalk.dim("  Checking dependencies..."));
+
+      // Docker
+      try {
+        await execFile("docker", ["info"]);
+        console.log(chalk.green("  ✓ Docker: installed and running"));
+      } catch {
+        console.log(chalk.red("  ✗ Docker: not found or not running"));
+        console.log(chalk.dim("    Install: https://docs.docker.com/get-docker/"));
+      }
+
+      // Claude Code
+      try {
+        await execFile("claude", ["--version"]);
+        console.log(chalk.green("  ✓ Claude Code: installed"));
+      } catch {
+        console.log(chalk.yellow("  ⚠ Claude Code: not found (needed inside Docker only)"));
+      }
+
+      // API keys
+      console.log();
+      if (process.env.GITHUB_TOKEN) {
+        console.log(chalk.green("  ✓ GITHUB_TOKEN: set"));
+      } else {
+        console.log(chalk.red("  ✗ GITHUB_TOKEN: not set"));
+        console.log(chalk.dim("    export GITHUB_TOKEN=ghp_..."));
+      }
+
+      if (process.env.ANTHROPIC_API_KEY) {
+        console.log(chalk.green("  ✓ ANTHROPIC_API_KEY: set"));
+      } else {
+        console.log(chalk.red("  ✗ ANTHROPIC_API_KEY: not set"));
+        console.log(chalk.dim("    export ANTHROPIC_API_KEY=sk-ant-..."));
+      }
+
+      console.log();
+      console.log(chalk.dim("  Edit config to customize: " + configName));
+      console.log();
     });
 
   // Cleanup subcommand
@@ -67,42 +123,229 @@ export function createCli(): Command {
       }
     });
 
+  // Upgrade subcommand
+  program
+    .command("upgrade")
+    .description("Update testme to the latest version")
+    .action(async () => {
+      console.log(chalk.dim(`  Current version: ${VERSION}`));
+      try {
+        const { stdout } = await execFile("npm", ["view", "testme", "version"]);
+        const latest = stdout.trim();
+        if (latest === VERSION) {
+          console.log(chalk.green(`  Already up to date (${VERSION}).`));
+          return;
+        }
+        console.log(chalk.dim(`  Latest version: ${latest}`));
+        console.log(chalk.dim("  Upgrading..."));
+        await execFile("npm", ["install", "-g", "testme@latest"]);
+        console.log(chalk.green(`  ✓ Upgraded to ${latest}`));
+      } catch {
+        console.error("Failed to check for updates. Run manually: npm install -g testme@latest");
+        process.exit(2);
+      }
+    });
+
+  // Config subcommand
+  program
+    .command("config")
+    .description("View current configuration and dependency status")
+    .option("--json", "output as JSON", false)
+    .action(async (opts: { json: boolean }) => {
+      const fileConfig = loadConfigFile(process.cwd());
+      const status = {
+        version: VERSION,
+        homeDir: HOME_DIR,
+        configSources: [] as string[],
+        config: {
+          budget: fileConfig.budget ?? DEFAULTS.budget,
+          timeout: fileConfig.timeout ?? DEFAULTS.timeout,
+          model: fileConfig.model ?? DEFAULTS.model,
+          dryRun: fileConfig.dryRun ?? false,
+          verbose: fileConfig.verbose ?? false,
+          skipWeb: fileConfig.skipWeb ?? false,
+          labels: fileConfig.labels ?? [],
+          customScenarios: fileConfig.customScenarios ?? [],
+        },
+        dependencies: {
+          docker: false,
+          claudeCode: false,
+          githubToken: !!process.env.GITHUB_TOKEN,
+          anthropicApiKey: !!process.env.ANTHROPIC_API_KEY,
+        },
+      };
+
+      // Check which config files exist
+      for (const f of [".testmerc.json", ".testmerc", "testme.config.json"]) {
+        if (existsSync(resolve(process.cwd(), f))) status.configSources.push(f);
+      }
+      if (existsSync(HOME_CONFIG_PATH)) status.configSources.push(HOME_CONFIG_PATH);
+
+      // Check deps
+      try { await execFile("docker", ["info"]); status.dependencies.docker = true; } catch {}
+      try { await execFile("claude", ["--version"]); status.dependencies.claudeCode = true; } catch {}
+
+      if (opts.json) {
+        console.log(JSON.stringify(status, null, 2));
+      } else {
+        console.log();
+        console.log(chalk.bold(`  testme v${VERSION}`));
+        console.log(chalk.dim(`  Home: ${HOME_DIR}`));
+        console.log(chalk.dim(`  Config: ${status.configSources.length > 0 ? status.configSources.join(", ") : "(defaults)"}`));
+        console.log();
+        console.log(`  budget: ${status.config.budget}  timeout: ${status.config.timeout}m  model: ${status.config.model}`);
+        console.log(`  dryRun: ${status.config.dryRun}  verbose: ${status.config.verbose}  skipWeb: ${status.config.skipWeb}`);
+        if (status.config.labels.length) console.log(`  labels: ${status.config.labels.join(", ")}`);
+        if (status.config.customScenarios.length) console.log(`  customScenarios: ${status.config.customScenarios.length}`);
+        console.log();
+        console.log(chalk.dim("  Dependencies:"));
+        console.log(`  ${status.dependencies.docker ? chalk.green("✓") : chalk.red("✗")} Docker`);
+        console.log(`  ${status.dependencies.claudeCode ? chalk.green("✓") : chalk.yellow("⚠")} Claude Code CLI`);
+        console.log(`  ${status.dependencies.githubToken ? chalk.green("✓") : chalk.red("✗")} GITHUB_TOKEN`);
+        console.log(`  ${status.dependencies.anthropicApiKey ? chalk.green("✓") : chalk.red("✗")} ANTHROPIC_API_KEY`);
+        console.log();
+      }
+    });
+
+  // Reset subcommand
+  program
+    .command("reset")
+    .description("Delete all testme data (config, reports) and start fresh")
+    .option("-y, --yes", "skip confirmation", false)
+    .action((opts: { yes: boolean }) => {
+      if (!existsSync(HOME_DIR)) {
+        console.log("Nothing to reset. No testme data found.");
+        return;
+      }
+
+      if (!opts.yes) {
+        console.log(chalk.yellow(`  This will delete ${HOME_DIR} and all reports.`));
+        console.log(chalk.yellow("  Run with --yes to confirm, or delete manually."));
+        process.exit(1);
+      }
+
+      rmSync(HOME_DIR, { recursive: true, force: true });
+      // Also remove CWD reports if present
+      const cwdReports = resolve(process.cwd(), ".testme-reports");
+      if (existsSync(cwdReports)) {
+        rmSync(cwdReports, { recursive: true, force: true });
+      }
+      console.log(chalk.green("  ✓ All testme data deleted. Run `testme init` to start fresh."));
+    });
+
+  // Export subcommand
+  program
+    .command("export")
+    .description("Export all testme data (config + reports) as a JSON backup")
+    .option("-o, --output <file>", "output file", "testme-backup.json")
+    .action((opts: { output: string }) => {
+      const backup: Record<string, unknown> = {};
+
+      // Config
+      if (existsSync(HOME_CONFIG_PATH)) {
+        try {
+          backup.config = JSON.parse(readFileSync(HOME_CONFIG_PATH, "utf-8"));
+        } catch {}
+      }
+      const cwdConfig = loadConfigFile(process.cwd());
+      if (Object.keys(cwdConfig).length > 0) {
+        backup.localConfig = cwdConfig;
+      }
+
+      // Reports from both locations
+      const reports: Record<string, unknown>[] = [];
+      for (const dir of [HOME_REPORTS_DIR, resolve(process.cwd(), ".testme-reports")]) {
+        if (!existsSync(dir)) continue;
+        for (const file of readdirSync(dir).filter((f: string) => f.endsWith(".json"))) {
+          try {
+            reports.push(JSON.parse(readFileSync(resolve(dir, file), "utf-8")));
+          } catch {}
+        }
+      }
+      backup.reports = reports;
+
+      writeFileSync(opts.output, JSON.stringify(backup, null, 2));
+      console.log(chalk.green(`  ✓ Exported ${reports.length} report(s) to ${opts.output}`));
+    });
+
+  // Import subcommand
+  program
+    .command("import <file>")
+    .description("Restore testme data from a JSON backup")
+    .action((file: string) => {
+      if (!existsSync(file)) {
+        console.error(`File not found: ${file}`);
+        process.exit(2);
+      }
+      let backup: Record<string, unknown>;
+      try {
+        backup = JSON.parse(readFileSync(file, "utf-8"));
+      } catch {
+        console.error("Failed to parse backup file.");
+        process.exit(2);
+      }
+
+      ensureHomeDir();
+
+      if (backup.config) {
+        writeFileSync(HOME_CONFIG_PATH, JSON.stringify(backup.config, null, 2));
+        console.log(chalk.green("  ✓ Config restored"));
+      }
+
+      if (Array.isArray(backup.reports)) {
+        let count = 0;
+        for (const report of backup.reports) {
+          const r = report as { repo?: string };
+          const name = (r.repo || "unknown").replace(/\//g, "-");
+          const ts = new Date().toISOString().replace(/[:.]/g, "-");
+          writeFileSync(
+            resolve(HOME_REPORTS_DIR, `${name}-${ts}-${count}.json`),
+            JSON.stringify(report, null, 2)
+          );
+          count++;
+        }
+        console.log(chalk.green(`  ✓ ${count} report(s) restored to ${HOME_REPORTS_DIR}`));
+      }
+    });
+
   // Reports subcommand
   program
     .command("reports")
-    .description("List past test reports from .testme-reports/")
-    .option("--dir <path>", "reports directory", ".testme-reports")
+    .description("List past test reports")
+    .option("--dir <path>", "reports directory")
     .action((opts) => {
-      const dir = resolve(process.cwd(), opts.dir);
-      if (!existsSync(dir)) {
-        console.log("No reports found. Run testme against a repo first.");
-        return;
+      // Check multiple report locations
+      const dirs = opts.dir
+        ? [resolve(process.cwd(), opts.dir)]
+        : [resolve(process.cwd(), ".testme-reports"), HOME_REPORTS_DIR];
+
+      const allFiles: Array<{ dir: string; file: string }> = [];
+      for (const dir of dirs) {
+        if (!existsSync(dir)) continue;
+        for (const file of readdirSync(dir).filter((f: string) => f.endsWith(".json"))) {
+          allFiles.push({ dir, file });
+        }
       }
-      const files = readdirSync(dir)
-        .filter((f: string) => f.endsWith(".json"))
-        .sort()
-        .reverse();
+      allFiles.sort((a, b) => b.file.localeCompare(a.file));
+
+      const files = allFiles;
 
       if (files.length === 0) {
         console.log("No reports found.");
         return;
       }
 
-      console.log(`\n  ${files.length} report(s) in ${opts.dir}/\n`);
-      for (const file of files) {
+      console.log(`\n  ${files.length} report(s)\n`);
+      for (const { dir: fileDir, file } of files) {
         try {
-          const raw = readFileSync(resolve(dir, file), "utf-8");
+          const raw = readFileSync(resolve(fileDir, file), "utf-8");
           const report = JSON.parse(raw) as JsonReport;
           const findings = report.summary?.total ?? 0;
           const elapsed = report.elapsedMs
             ? `${Math.round(report.elapsedMs / 1000)}s`
             : "?";
-          console.log(
-            `  ${file}`
-          );
-          console.log(
-            `    ${report.repo} — ${findings} finding(s), ${elapsed}`
-          );
+          console.log(`  ${file}`);
+          console.log(`    ${report.repo} — ${findings} finding(s), ${elapsed}`);
         } catch {
           console.log(`  ${file} (unreadable)`);
         }

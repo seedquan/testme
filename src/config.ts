@@ -1,5 +1,6 @@
-import { readFileSync, existsSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { homedir } from "node:os";
 
 export interface Config {
   owner: string;
@@ -61,12 +62,21 @@ export interface IssueResult {
   duplicateOf?: number;
 }
 
+export const HOME_DIR = join(homedir(), ".testme");
+export const HOME_CONFIG_PATH = join(HOME_DIR, "config.json");
+export const HOME_REPORTS_DIR = join(HOME_DIR, "reports");
+
 export const DEFAULTS = {
   budget: 5,
   timeout: 30,
   model: "sonnet",
   dockerImage: "testme-sandbox:latest",
 } as const;
+
+export function ensureHomeDir(): void {
+  mkdirSync(HOME_DIR, { recursive: true });
+  mkdirSync(HOME_REPORTS_DIR, { recursive: true });
+}
 
 export interface CustomScenario {
   name: string;
@@ -90,6 +100,7 @@ export interface ConfigFile {
 export const CONFIG_FILENAMES = [".testmerc.json", ".testmerc", "testme.config.json"];
 
 export function loadConfigFile(cwd: string): ConfigFile {
+  // Check CWD first (project-level config takes priority)
   for (const filename of CONFIG_FILENAMES) {
     const filepath = join(cwd, filename);
     if (existsSync(filepath)) {
@@ -101,6 +112,15 @@ export function loadConfigFile(cwd: string): ConfigFile {
           `Warning: Failed to parse ${filename}: ${err instanceof Error ? err.message : String(err)}`
         );
       }
+    }
+  }
+  // Fall back to home directory config
+  if (existsSync(HOME_CONFIG_PATH)) {
+    try {
+      const raw = readFileSync(HOME_CONFIG_PATH, "utf-8");
+      return JSON.parse(raw) as ConfigFile;
+    } catch {
+      // Ignore home config parse errors
     }
   }
   return {};

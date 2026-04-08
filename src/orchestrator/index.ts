@@ -22,6 +22,7 @@ import {
 } from "../output/terminal.js";
 import { withRetry } from "../utils/retry.js";
 import { friendlyError } from "../utils/errors.js";
+import { ensureHomeDir, HOME_REPORTS_DIR } from "../config.js";
 import chalk from "chalk";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -236,16 +237,25 @@ export async function run(config: Config): Promise<void> {
 
 function saveReport(config: Config, report: ReturnType<typeof formatJsonReport>): void {
   try {
-    const dir = resolve(process.cwd(), ".testme-reports");
-    mkdirSync(dir, { recursive: true });
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
     const baseName = `${config.owner}-${config.repo}-${timestamp}`;
+    const jsonContent = JSON.stringify(report, null, 2);
+    const mdContent = formatMarkdownReport(report);
 
-    // Save JSON report
-    writeFileSync(resolve(dir, `${baseName}.json`), JSON.stringify(report, null, 2));
+    // Save to CWD .testme-reports/ (backward compat)
+    const cwdDir = resolve(process.cwd(), ".testme-reports");
+    mkdirSync(cwdDir, { recursive: true });
+    writeFileSync(resolve(cwdDir, `${baseName}.json`), jsonContent);
+    writeFileSync(resolve(cwdDir, `${baseName}.md`), mdContent);
 
-    // Save markdown report for human readability
-    writeFileSync(resolve(dir, `${baseName}.md`), formatMarkdownReport(report));
+    // Also save to home directory
+    try {
+      ensureHomeDir();
+      writeFileSync(resolve(HOME_REPORTS_DIR, `${baseName}.json`), jsonContent);
+      writeFileSync(resolve(HOME_REPORTS_DIR, `${baseName}.md`), mdContent);
+    } catch {
+      // Home dir save is best-effort
+    }
 
     if (!config.json) {
       console.log(chalk.dim(`  Reports saved to .testme-reports/${baseName}.{json,md}`));

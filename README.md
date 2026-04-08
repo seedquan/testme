@@ -68,13 +68,14 @@ testme https://github.com/owner/repo \
 testme https://github.com/owner/repo
 ```
 
-### Initialize config file
+### Initialize (first-time setup)
 
 ```bash
-testme init
+testme init          # creates ~/.testme/ with config
+testme init --local  # creates .testmerc.json in current directory
 ```
 
-Creates a `.testmerc.json` with default settings. Edit it to customize budget, model, labels, and custom test scenarios.
+Sets up the home directory (`~/.testme/`), creates a config file, and checks that Docker, Claude Code, and API keys are available.
 
 ### Preview the test plan (no Docker needed)
 
@@ -111,6 +112,34 @@ testme cleanup
 ```
 
 Removes any Docker containers left behind by crashed or interrupted runs.
+
+### View current configuration
+
+```bash
+testme config          # human-readable
+testme config --json   # machine-readable
+```
+
+Shows active settings, config file locations, and dependency status (Docker, API keys).
+
+### Update to latest version
+
+```bash
+testme upgrade
+```
+
+### Export / import data
+
+```bash
+testme export -o backup.json     # backup config + reports
+testme import backup.json        # restore from backup
+```
+
+### Reset all data
+
+```bash
+testme reset --yes   # delete ~/.testme/ and all reports
+```
 
 ## Config File
 
