@@ -84,6 +84,41 @@ End of report.`;
     expect(findings).toHaveLength(0);
   });
 
+  it("handles trailing commas in JSON", () => {
+    const output = `\`\`\`testme-findings
+[
+  {
+    "title": "Trailing comma",
+    "description": "desc",
+    "severity": "major",
+    "category": "bug",
+    "stepsToReproduce": ["step",],
+    "expected": "expected",
+    "actual": "actual",
+  },
+]
+\`\`\``;
+
+    const findings = parseFindings(output);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].title).toBe("Trailing comma");
+  });
+
+  it("extracts from json code fence", () => {
+    const output = `Here are the results:\n\`\`\`json\n[{"title":"Found","description":"desc","severity":"minor","category":"bug","stepsToReproduce":["s"],"expected":"e","actual":"a"}]\n\`\`\``;
+    const findings = parseFindings(output);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].title).toBe("Found");
+  });
+
+  it("handles large output efficiently with bracket counting", () => {
+    const padding = "x".repeat(5000);
+    const output = `${padding}[{"title":"Deep","description":"d","severity":"minor","category":"bug","stepsToReproduce":["s"],"expected":"e","actual":"a"}]${padding}`;
+    const findings = parseFindings(output);
+    expect(findings).toHaveLength(1);
+    expect(findings[0].title).toBe("Deep");
+  });
+
   it("filters out invalid findings", () => {
     const output = `
 \`\`\`testme-findings
