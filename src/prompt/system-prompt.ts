@@ -32,6 +32,17 @@ ${context.readme ? context.readme.slice(0, 30000) : "_No README found. Rely on t
 
 ${scenariosList}
 
+## Known Issues (DO NOT DUPLICATE)
+
+${
+    context.existingIssues.length > 0
+      ? `The following issues are already filed. Do NOT report these again:\n\n${context.existingIssues
+          .slice(0, 20)
+          .map((i) => `- #${i.number}: ${i.title}`)
+          .join("\n")}\n\nIf you find an issue that is similar to but distinct from an existing one, note the difference clearly.`
+      : "_No existing issues found._"
+  }
+
 ## Instructions
 
 1. **Install the product** using the install method above. Note any issues during installation.

@@ -136,4 +136,23 @@ describe("buildSystemPrompt", () => {
     const prompt = buildSystemPrompt(ctx, basePlan, { skipWeb: false });
     expect(prompt).toContain("acme/widget");
   });
+
+  it("includes existing issues to prevent duplicates", () => {
+    const ctx = {
+      ...baseContext,
+      existingIssues: [
+        { title: "Install fails on M1", body: "npm error", number: 42 },
+        { title: "Docs are outdated", body: "missing v2 docs", number: 57 },
+      ],
+    };
+    const prompt = buildSystemPrompt(ctx, basePlan, { skipWeb: false });
+    expect(prompt).toContain("DO NOT DUPLICATE");
+    expect(prompt).toContain("#42: Install fails on M1");
+    expect(prompt).toContain("#57: Docs are outdated");
+  });
+
+  it("shows no issues message when none exist", () => {
+    const prompt = buildSystemPrompt(baseContext, basePlan, { skipWeb: false });
+    expect(prompt).toContain("No existing issues found");
+  });
 });
